@@ -6,12 +6,14 @@ import br.com.erikdev.sistema_evento.database.model.ParticipanteEntity;
 import br.com.erikdev.sistema_evento.database.repository.IEventoRepository;
 import br.com.erikdev.sistema_evento.database.repository.IInscricaoRepository;
 import br.com.erikdev.sistema_evento.database.repository.IParticipanteRepository;
+import br.com.erikdev.sistema_evento.dto.InscricaoDto;
 import br.com.erikdev.sistema_evento.enums.InscricaoEnum;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -23,15 +25,15 @@ public class InscricaoService {
     private final IEventoRepository eventoRepository;
 
     @Transactional
-    public InscricaoEntity realizarInscricao(UUID participanteId, UUID eventoId) {
+    public InscricaoEntity realizarInscricao(InscricaoDto dto) {
 
-        ParticipanteEntity participante = participanteRepository.findById(participanteId)
+        ParticipanteEntity participante = participanteRepository.findById(dto.participanteId())
                 .orElseThrow(() -> new RuntimeException("Participante não encontrado"));
 
-        EventoEntity evento = eventoRepository.findById(eventoId)
+        EventoEntity evento = eventoRepository.findById(dto.eventoId())
                 .orElseThrow(() -> new RuntimeException("Evento não encontrado"));
 
-        if (inscricaoRepository.existsByParticipanteAndEvento(participante.getId(), evento.getId())) {
+        if (inscricaoRepository.existsByParticipanteIdAndEventoId(participante.getId(), evento.getId())) {
             throw new RuntimeException("Usuário já está inscrito!");
         }
 
@@ -43,14 +45,44 @@ public class InscricaoService {
         novaInscricao.setParticipante(participante);
         novaInscricao.setEvento(evento);
         novaInscricao.setDataInscricao(LocalDateTime.now());
-        novaInscricao.setStatus(InscricaoEnum.CONFIRMADA);
 
-        evento.setVagasDisponiveis(evento.getVagasDisponiveis() - 1);
-        eventoRepository.save(evento);
+        if (evento.getVagasDisponiveis() > 0) {
+            novaInscricao.setStatus(InscricaoEnum.CONFIRMADA);
+            evento.setVagasDisponiveis(evento.getVagasDisponiveis() - 1);
+            eventoRepository.save(evento);
+        } else {
+            novaInscricao.setStatus(InscricaoEnum.LISTA_DE_ESPERA);
+        }
 
         return inscricaoRepository.save(novaInscricao);
     }
 
+    @Transactional
+    public void cancelarInscricao(UUID inscricaoId) {
+        InscricaoEntity inscricaoCancelada = inscricaoRepository.findById(inscricaoId)
+                .orElseThrow(() -> new RuntimeException("Inscrição não encontrada"));
 
+        if (inscricaoCancelada.getStatus() == InscricaoEnum.CANCELADA) {
+            throw new RuntimeException("Esta inscrição já foi cancelada!");
+        }
 
+        EventoEntity evento = inscricaoCancelada.getEvento();
+
+        if (inscricaoCancelada.getStatus() == InscricaoEnum.CONFIRMADA) {
+
+            Optional<InscricaoEntity> proximoDaFila = inscricaoRepository
+                    .findFirstByEventoAndStatusOrderByDataInscricaoAsc(evento, InscricaoEnum.LISTA_DE_ESPERA);
+
+            if (proximoDaFila.isPresent()) {
+                InscricaoEntity sortudo = proximoDaFila.get();
+                sortudo.setStatus(InscricaoEnum.CONFIRMADA);
+                inscricaoRepository.save(sortudo);
+            } else {
+                evento.setVagasDisponiveis(evento.getVagasDisponiveis() + 1);
+                eventoRepository.save(evento);
+            }
+        }
+        inscricaoCancelada.setStatus(InscricaoEnum.CANCELADA);
+        inscricaoRepository.save(inscricaoCancelada);
+    }
 }
