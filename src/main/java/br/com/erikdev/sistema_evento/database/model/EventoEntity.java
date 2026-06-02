@@ -1,6 +1,8 @@
 package br.com.erikdev.sistema_evento.database.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,8 +31,11 @@ public class EventoEntity {
     private String localizacao;
 
     @Column(name = "capacidade_maxima")
+    @PositiveOrZero
     private Integer capacidadeMaxima;
 
     @Column(name = "vagas_disponiveis")
+    @PositiveOrZero
+    @Min(value = 0)
     private Integer vagasDisponiveis;
 }
