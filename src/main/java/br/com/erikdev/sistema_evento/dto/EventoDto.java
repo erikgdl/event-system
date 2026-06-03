@@ -14,6 +14,5 @@ public record EventoDto(
         String localizacao,
         @NotNull
         Integer capacidadeMaxima,
-        @NotNull
         Integer vagasDisponiveis) {
 }
