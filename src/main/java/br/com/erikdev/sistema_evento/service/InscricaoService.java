@@ -8,11 +8,14 @@ import br.com.erikdev.sistema_evento.database.repository.IInscricaoRepository;
 import br.com.erikdev.sistema_evento.database.repository.IParticipanteRepository;
 import br.com.erikdev.sistema_evento.dto.InscricaoDto;
 import br.com.erikdev.sistema_evento.enums.InscricaoEnum;
+import br.com.erikdev.sistema_evento.exception.BadRequestException;
+import br.com.erikdev.sistema_evento.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,20 +28,16 @@ public class InscricaoService {
     private final IEventoRepository eventoRepository;
 
     @Transactional
-    public InscricaoEntity realizarInscricao(InscricaoDto dto) {
+    public InscricaoEntity realizarInscricao(InscricaoDto dto) throws NotFoundException, BadRequestException {
 
         ParticipanteEntity participante = participanteRepository.findById(dto.participanteId())
-                .orElseThrow(() -> new RuntimeException("Participante não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Participante não encontrado"));
 
         EventoEntity evento = eventoRepository.findById(dto.eventoId())
-                .orElseThrow(() -> new RuntimeException("Evento não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Evento não encontrado"));
 
         if (inscricaoRepository.existsByParticipanteIdAndEventoId(participante.getId(), evento.getId())) {
-            throw new RuntimeException("Usuário já está inscrito!");
-        }
-
-        if (evento.getVagasDisponiveis() <= 0) {
-            throw new RuntimeException("Evento esgotado!");
+            throw new BadRequestException("Usuário já está inscrito!");
         }
 
         InscricaoEntity novaInscricao = new InscricaoEntity();
@@ -57,13 +56,22 @@ public class InscricaoService {
         return inscricaoRepository.save(novaInscricao);
     }
 
+    public List<InscricaoEntity> listarInscricoes() {
+        return inscricaoRepository.findAll();
+    }
+
+    public InscricaoEntity buscarInscricaoPorId(UUID id) throws NotFoundException {
+        return inscricaoRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Inscrição não encontrada"));
+    }
+
     @Transactional
-    public void cancelarInscricao(UUID inscricaoId) {
+    public void cancelarInscricao(UUID inscricaoId) throws NotFoundException, BadRequestException {
         InscricaoEntity inscricaoCancelada = inscricaoRepository.findById(inscricaoId)
-                .orElseThrow(() -> new RuntimeException("Inscrição não encontrada"));
+                .orElseThrow(() -> new NotFoundException("Inscrição não encontrada"));
 
         if (inscricaoCancelada.getStatus() == InscricaoEnum.CANCELADA) {
-            throw new RuntimeException("Esta inscrição já foi cancelada!");
+            throw new BadRequestException("Esta inscrição já foi cancelada!");
         }
 
         EventoEntity evento = inscricaoCancelada.getEvento();
@@ -84,5 +92,15 @@ public class InscricaoService {
         }
         inscricaoCancelada.setStatus(InscricaoEnum.CANCELADA);
         inscricaoRepository.save(inscricaoCancelada);
+    }
+
+    public List<ParticipanteEntity> listarParticipantesConfirmados(UUID eventoId) throws NotFoundException {
+        EventoEntity evento = eventoRepository.findById(eventoId)
+                .orElseThrow(() -> new NotFoundException("Evento não encontrado"));
+
+        return inscricaoRepository.findByEventoAndStatusOrderByDataInscricaoAsc(evento, InscricaoEnum.CONFIRMADA)
+                .stream()
+                .map(InscricaoEntity::getParticipante)
+                .toList();
     }
 }
