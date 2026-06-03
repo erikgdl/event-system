@@ -7,6 +7,7 @@ import br.com.erikdev.sistema_evento.enums.InscricaoEnum;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,4 +17,10 @@ public interface IInscricaoRepository extends JpaRepository<InscricaoEntity, UUI
     Boolean existsByParticipanteIdAndEventoId(UUID participante, UUID evento);
 
     Optional<InscricaoEntity> findFirstByEventoAndStatusOrderByDataInscricaoAsc(EventoEntity evento, InscricaoEnum status);
+
+    List<InscricaoEntity> findByEventoAndStatusOrderByDataInscricaoAsc(EventoEntity evento, InscricaoEnum status);
+
+    void deleteByEvento(EventoEntity evento);
+
+    void deleteByParticipante(ParticipanteEntity participante);
 }
